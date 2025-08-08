@@ -6,7 +6,7 @@ A fast, parallel Rust simulator for diploid Wright–Fisher dynamics with:
 - Additive and GxE genetic architectures (environment modulates genetic effects)
 - Controllable genetic correlations between traits (additive and GxE components)
 - Dynamic population size schedules across generations
-- CSV allele-frequency trajectories and live progress reporting
+- CSV allele-frequency trajectories, phenotype timeseries, and live progress reporting
 
 Built for speed, reproducibility, and clarity — ideal for experiments, teaching, and method prototyping.
 
@@ -19,7 +19,7 @@ Built for speed, reproducibility, and clarity — ideal for experiments, teachin
 - Cross-trait correlations: set `--rg-add` and `--rg-gxe` in [-1, 1]
 - Initialization: per‑locus frequencies from `U(init_freq_min, init_freq_max)` (defaults 0.05–0.95)
 - Reproducibility: deterministic with `--seed`; per-thread seeds derived per generation
-- Output: CSV trajectories (`generation,snp_id,frequency`) streamed to disk
+- Output: CSV trajectories (`generation,snp_id,frequency`) and phenotype timeseries streamed to disk
 - Population schedules: change N during the run with repeatable `--pop-schedule GEN:SIZE`
 
 ---
@@ -59,7 +59,8 @@ cargo run -- \
   --optimum 0.0 --omega 1.0 \
   --optimum2 0.0 --omega2 1.0 \
   --threads 0 --seed 42 \
-  --out allele_trajectories.csv
+  --out allele_trajectories.csv \
+  --phenotype-out phenotype_timeseries.csv
 ```
 
 Change population size mid-run with a schedule (repeatable flag):
@@ -90,6 +91,19 @@ generation,snp_id,frequency
 1,1,0.519
 ...
 ```
+
+Phenotype timeseries CSV (`phenotype_timeseries.csv`) includes per-generation stats for both traits:
+
+```csv
+generation,N,avg_fitness,mean_z1,var_z1,real_var_add1,real_var_gxe1,mean_z2,var_z2,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real
+1,1000,0.913201,-0.0021,0.3567,0.1972,0.0983,0.0015,0.2410,0.1481,0.0524,0.51,0.19
+...
+```
+Where:
+- mean_z1/mean_z2: population means of phenotypes for trait 1/2.
+- var_z1/var_z2: population variances of phenotypes (per generation).
+- real_var_add*/real_var_gxe*: realized additive and GxE genetic variances computed from current allele frequencies and effect sizes.
+- rg_add_real/rg_gxe_real: realized genetic correlations (additive and GxE components).
  
 ---
 

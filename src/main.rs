@@ -145,6 +145,10 @@ struct Args {
     #[arg(short = 'o', long = "out", default_value = "allele_trajectories.csv")]
     out: String,
 
+    /// Output CSV file path for per-generation phenotype statistics
+    #[arg(long = "phenotype-out", default_value = "phenotype_timeseries.csv")]
+    phenotype_out: String,
+
     /// Random seed (optional). If not provided, a random seed is used.
     #[arg(long = "seed")]
     seed: Option<u64>,
@@ -231,6 +235,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut writer = BufWriter::new(file);
     writeln!(writer, "generation,snp_id,frequency")?;
 
+    // Prepare phenotype stats writer
+    let ph_file = File::create(&args.phenotype_out)?;
+    let mut ph_writer = BufWriter::new(ph_file);
+    writeln!(
+        ph_writer,
+        "generation,N,avg_fitness,mean_z1,var_z1,real_var_add1,real_var_gxe1,mean_z2,var_z2,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real"
+    )?;
+
     // Output initial frequencies (generation 0)
     let mut cur_freqs = allele_freqs(&genotypes);
     for (j, &p) in cur_freqs.iter().enumerate() {
@@ -281,6 +293,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             args.omega,
             args.omega2,
         );
+        // Per-trait sample mean and variance of phenotypes this generation
+        let (mean1, var1) = mean_var(&phenos1);
+        let (mean2, var2) = mean_var(&phenos2);
         let fitness = combined_fitness(
             &phenos1,
             &phenos2,
@@ -310,6 +325,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         cur_freqs = allele_freqs(&genotypes);
         let (h2a1, h2g1, h2a2, h2g2, rg_add_real, rg_gxe_real) =
             realized_heritabilities_pair(&cur_freqs, &a1, &b1, &a2, &b2, args.env_sd);
+        // Write phenotype stats row
+        writeln!(
+            ph_writer,
+            "{generation},{current_n},{avg_fit},{mean1},{var1},{h2a1},{h2g1},{mean2},{var2},{h2a2},{h2g2},{rg_add_real},{rg_gxe_real}"
+        )?;
+        ph_writer.flush()?;
         for (j, &p) in cur_freqs.iter().enumerate() {
             writeln!(writer, "{generation},{j} ,{p}")?;
         }
@@ -361,6 +382,26 @@ fn fmt_elapsed(d: Duration) -> String {
     let s = secs % 60;
     let ms = d.subsec_millis();
     format!("{h:02}:{m:02}:{s:02}.{ms:03}")
+}
+
+/// Compute the sample mean and population variance of a slice.
+fn mean_var(xs: &[f64]) -> (f64, f64) {
+    let n = xs.len();
+    if n == 0 {
+        return (0.0, 0.0);
+    }
+    let mut mean = 0.0f64;
+    for &x in xs.iter() {
+        mean += x;
+    }
+    mean /= n as f64;
+    let mut var = 0.0f64;
+    for &x in xs.iter() {
+        let d = x - mean;
+        var += d * d;
+    }
+    var /= n as f64;
+    (mean, var)
 }
 
 /// Compute average combined (unnormalized) Gaussian fitness across individuals
@@ -460,10 +501,9 @@ fn parse_pop_schedule(
             .parse()
             .map_err(|_| format!("invalid size '{n_str}' in pop-schedule"))?;
         if g == 0 || g > generations {
-            return Err(format!(
-                "pop-schedule generation {g} out of range (1..={generations})"
-            )
-            .into());
+            return Err(
+                format!("pop-schedule generation {g} out of range (1..={generations})").into(),
+            );
         }
         if n == 0 {
             return Err("pop-schedule sizes must be > 0".into());
