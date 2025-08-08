@@ -240,7 +240,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut ph_writer = BufWriter::new(ph_file);
     writeln!(
         ph_writer,
-        "generation,N,avg_fitness,mean_z1,var_z1,real_var_add1,real_var_gxe1,mean_z2,var_z2,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real"
+        "generation,N,avg_fitness,mean_z1,var_z1,mean_z2,var_z2,phen_cov,phen_corr,real_var_add1,real_var_gxe1,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real"
     )?;
 
     // Output initial frequencies (generation 0)
@@ -296,6 +296,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Per-trait sample mean and variance of phenotypes this generation
         let (mean1, var1) = mean_var(&phenos1);
         let (mean2, var2) = mean_var(&phenos2);
+        let (cov12, corr12) = cov_corr(&phenos1, &phenos2, mean1, mean2, var1, var2);
         let fitness = combined_fitness(
             &phenos1,
             &phenos2,
@@ -328,7 +329,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Write phenotype stats row
         writeln!(
             ph_writer,
-            "{generation},{current_n},{avg_fit},{mean1},{var1},{h2a1},{h2g1},{mean2},{var2},{h2a2},{h2g2},{rg_add_real},{rg_gxe_real}"
+            "{generation},{current_n},{avg_fit},{mean1},{var1},{mean2},{var2},{cov12},{corr12},{h2a1},{h2g1},{h2a2},{h2g2},{rg_add_real},{rg_gxe_real}"
         )?;
         ph_writer.flush()?;
         for (j, &p) in cur_freqs.iter().enumerate() {
@@ -402,6 +403,26 @@ fn mean_var(xs: &[f64]) -> (f64, f64) {
     }
     var /= n as f64;
     (mean, var)
+}
+
+/// Compute phenotypic covariance and correlation between two slices.
+/// Uses population moments (divide by N) to match `mean_var`.
+fn cov_corr(z1: &[f64], z2: &[f64], mean1: f64, mean2: f64, var1: f64, var2: f64) -> (f64, f64) {
+    let n = z1.len();
+    if n == 0 || n != z2.len() {
+        return (0.0, 0.0);
+    }
+    let mut cov = 0.0f64;
+    for i in 0..n {
+        cov += (z1[i] - mean1) * (z2[i] - mean2);
+    }
+    cov /= n as f64;
+    let corr = if var1 > 0.0 && var2 > 0.0 {
+        cov / (var1.sqrt() * var2.sqrt())
+    } else {
+        0.0
+    };
+    (cov, corr)
 }
 
 /// Compute average combined (unnormalized) Gaussian fitness across individuals

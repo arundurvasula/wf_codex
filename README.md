@@ -95,13 +95,14 @@ generation,snp_id,frequency
 Phenotype timeseries CSV (`phenotype_timeseries.csv`) includes per-generation stats for both traits:
 
 ```csv
-generation,N,avg_fitness,mean_z1,var_z1,real_var_add1,real_var_gxe1,mean_z2,var_z2,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real
-1,1000,0.913201,-0.0021,0.3567,0.1972,0.0983,0.0015,0.2410,0.1481,0.0524,0.51,0.19
+generation,N,avg_fitness,mean_z1,var_z1,mean_z2,var_z2,phen_cov,phen_corr,real_var_add1,real_var_gxe1,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real
+1,1000,0.913201,-0.0021,0.3567,0.0015,0.2410,-0.0003,-0.0012,0.1972,0.0983,0.1481,0.0524,0.51,0.19
 ...
 ```
 Where:
 - mean_z1/mean_z2: population means of phenotypes for trait 1/2.
 - var_z1/var_z2: population variances of phenotypes (per generation).
+- phen_cov/phen_corr: phenotypic covariance and correlation between trait 1 and 2 in the generation.
 - real_var_add*/real_var_gxe*: realized additive and GxE genetic variances computed from current allele frequencies and effect sizes.
 - rg_add_real/rg_gxe_real: realized genetic correlations (additive and GxE components).
  
