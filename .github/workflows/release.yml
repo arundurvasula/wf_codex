@@ -3,6 +3,8 @@ name: Release
 on:
   release:
     types: [published]
+  # Allow manual runs to test the build without publishing a GitHub Release
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,6 +24,11 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - name: Cache cargo build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
       - name: Build release binary
         run: cargo build --release
 
@@ -39,8 +46,16 @@ jobs:
           mv "target/release/${BIN_NAME}" "${BIN_NAME}-${PLATFORM}-${ARCH}"
 
       - name: Upload release asset(s)
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
           files: wf_codex-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts (for testing)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wf_codex-${{ matrix.os }}-${{ runner.arch }}
+          path: wf_codex-*
