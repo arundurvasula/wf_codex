@@ -40,5 +40,5 @@ jobs:
       - name: Run default tests
         run: cargo test --verbose
 
-      - name: Run heavy tests (feature: heavy-tests)
+      - name: Run heavy tests (feature heavy-tests)
         run: cargo test --features heavy-tests --verbose
