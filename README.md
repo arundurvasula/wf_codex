@@ -46,6 +46,20 @@ cargo clippy -- -D warnings
 
 ---
 
+## Documentation
+
+- In-repo docs live under `docs/`:
+  - Start at `docs/index.md`
+  - Usage: `docs/usage.md`
+  - CLI: `docs/cli.md`
+  - Model: `docs/model.md`
+  - Outputs: `docs/outputs.md`
+  - Build & Release: `docs/build_and_release.md`
+- API docs can be built locally via `cargo doc --no-deps --open`.
+- If enabled, GitHub Pages hosts the API docs built from CI.
+
+---
+
 ## Prebuilt Binaries
 
 You can download ready-to-run binaries from the GitHub Releases page.
