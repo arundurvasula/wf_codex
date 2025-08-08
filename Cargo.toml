@@ -1,0 +1,13 @@
+[package]
+name = "wf_codex"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rand = "0.8"
+rand_distr = "0.4"
+
+[features]
+# Enable heavier, longer-running stochastic tests.
+heavy-tests = []
