@@ -32,6 +32,10 @@
 //!   - `generation`: generation index (0 is initial state)
 //!   - `snp_id`: locus index in `[0, L)`
 //!   - `frequency`: derived allele frequency in `[0,1]`
+//!   - `a1`,`b1`: trait 1 additive and GxE causal effect sizes for this SNP
+//!   - `a2`,`b2`: trait 2 additive and GxE causal effect sizes for this SNP
+//!   - `s_effect`: effective selection coefficient per allele copy (average marginal
+//!                 effect on relative fitness, aggregated over individuals)
 //! - Live progress line on stderr each generation with timestamp, average fitness,
 //!   configured and realized heritabilities for both traits, and realized genetic
 //!   correlations.
@@ -233,7 +237,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare output writer
     let file = File::create(&args.out)?;
     let mut writer = BufWriter::new(file);
-    writeln!(writer, "generation,snp_id,frequency")?;
+    writeln!(writer, "generation,snp_id,frequency,a1,b1,a2,b2,s_effect")?;
 
     // Prepare phenotype stats writer
     let ph_file = File::create(&args.phenotype_out)?;
@@ -243,10 +247,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         "generation,N,avg_fitness,mean_z1,var_z1,mean_z2,var_z2,phen_cov,phen_corr,real_var_add1,real_var_gxe1,real_var_add2,real_var_gxe2,rg_add_real,rg_gxe_real"
     )?;
 
-    // Output initial frequencies (generation 0)
+    // Output initial frequencies and selection effect (generation 0)
     let mut cur_freqs = allele_freqs(&genotypes);
+    // Sample an environment for generation 0 to compute phenotypes and selection effects
+    let env0 = sample_env_parallel(n, args.env_sd, seed, 0, determine_threads(args.threads))?;
+    let (z1_0, z2_0) = compute_phenotypes_two_parallel(&genotypes, &a1, &b1, &a2, &b2, &p0, &env0, determine_threads(args.threads));
+    let fitness0 = combined_fitness(&z1_0, &z2_0, args.optimum, args.optimum2, args.omega, args.omega2);
+    let s_eff0 = per_locus_selection_effects(
+        &z1_0,
+        &z2_0,
+        &env0,
+        &fitness0,
+        &a1,
+        &b1,
+        &a2,
+        &b2,
+        args.optimum,
+        args.optimum2,
+        args.omega,
+        args.omega2,
+    );
     for (j, &p) in cur_freqs.iter().enumerate() {
-        writeln!(writer, "0,{j},{p}")?;
+        writeln!(
+            writer,
+            "0,{j},{p},{},{},{},{},{}",
+            a1[j], b1[j], a2[j], b2[j], s_eff0[j]
+        )?;
     }
 
     // Determine worker threads
@@ -305,6 +331,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             args.omega,
             args.omega2,
         );
+        // Per-locus effective selection coefficient for this generation
+        let s_eff = per_locus_selection_effects(
+            &phenos1,
+            &phenos2,
+            &env,
+            &fitness,
+            &a1,
+            &b1,
+            &a2,
+            &b2,
+            args.optimum,
+            args.optimum2,
+            args.omega,
+            args.omega2,
+        );
 
         // Reproduce to create next generation (N diploid offspring)
         let next_n = pop_sched.get(&generation).copied().unwrap_or(current_n);
@@ -333,7 +374,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         )?;
         ph_writer.flush()?;
         for (j, &p) in cur_freqs.iter().enumerate() {
-            writeln!(writer, "{generation},{j} ,{p}")?;
+            writeln!(
+                writer,
+                "{generation},{j},{p},{},{},{},{},{}",
+                a1[j], b1[j], a2[j], b2[j], s_eff[j]
+            )?;
         }
         // Ensure data hits disk progressively for long runs
         writer.flush()?;
@@ -844,6 +889,62 @@ fn combined_fitness(
         *wi /= sum;
     }
     w
+}
+
+/// Compute per-locus effective selection coefficients (average marginal effect on relative fitness).
+///
+/// For each SNP j, we compute:
+///   s_j = sum_i w_i_norm * [ dlogw/dz1_i * (a1_j + b1_j * E_i) + dlogw/dz2_i * (a2_j + b2_j * E_i) ]
+/// where w_i_norm are the normalized reproduction weights (sum to 1 across individuals),
+/// dlogw/dz_k = -(z_k - optimum_k) / omega_k^2, and E_i is the environment.
+fn per_locus_selection_effects(
+    phenos1: &[f64],
+    phenos2: &[f64],
+    env: &[f64],
+    fitness_norm: &[f64],
+    a1: &[f64],
+    b1: &[f64],
+    a2: &[f64],
+    b2: &[f64],
+    optimum1: f64,
+    optimum2: f64,
+    omega1: f64,
+    omega2: f64,
+) -> Vec<f64> {
+    let n = phenos1.len();
+    let l = a1.len();
+    assert_eq!(phenos2.len(), n);
+    assert_eq!(env.len(), n);
+    assert_eq!(fitness_norm.len(), n);
+    assert_eq!(b1.len(), l);
+    assert_eq!(a2.len(), l);
+    assert_eq!(b2.len(), l);
+
+    let inv_om1_sq = 1.0 / (omega1 * omega1);
+    let inv_om2_sq = 1.0 / (omega2 * omega2);
+    let mut dlogw1 = vec![0.0f64; n];
+    let mut dlogw2 = vec![0.0f64; n];
+    for i in 0..n {
+        dlogw1[i] = -((phenos1[i] - optimum1) * inv_om1_sq);
+        dlogw2[i] = -((phenos2[i] - optimum2) * inv_om2_sq);
+    }
+
+    let mut out = vec![0.0f64; l];
+    for j in 0..l {
+        let a1j = a1[j];
+        let b1j = b1[j];
+        let a2j = a2[j];
+        let b2j = b2[j];
+        let mut s = 0.0f64;
+        for i in 0..n {
+            let dz1_dg = a1j + b1j * env[i];
+            let dz2_dg = a2j + b2j * env[i];
+            let dlogw_dg = dlogw1[i] * dz1_dg + dlogw2[i] * dz2_dg;
+            s += fitness_norm[i] * dlogw_dg;
+        }
+        out[j] = s;
+    }
+    out
 }
 
 /// Produce the next generation of genotypes via Wright–Fisher sampling.
