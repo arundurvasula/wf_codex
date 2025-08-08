@@ -34,8 +34,7 @@
 //!   - `frequency`: derived allele frequency in `[0,1]`
 //!   - `a1`,`b1`: trait 1 additive and GxE causal effect sizes for this SNP
 //!   - `a2`,`b2`: trait 2 additive and GxE causal effect sizes for this SNP
-//!   - `s_effect`: effective selection coefficient per allele copy (average marginal
-//!                 effect on relative fitness, aggregated over individuals)
+//!   - `s_effect`: effective selection coefficient per allele copy (average marginal effect on relative fitness, aggregated over individuals)
 //! - Live progress line on stderr each generation with timestamp, average fitness,
 //!   configured and realized heritabilities for both traits, and realized genetic
 //!   correlations.
@@ -251,8 +250,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut cur_freqs = allele_freqs(&genotypes);
     // Sample an environment for generation 0 to compute phenotypes and selection effects
     let env0 = sample_env_parallel(n, args.env_sd, seed, 0, determine_threads(args.threads))?;
-    let (z1_0, z2_0) = compute_phenotypes_two_parallel(&genotypes, &a1, &b1, &a2, &b2, &p0, &env0, determine_threads(args.threads));
-    let fitness0 = combined_fitness(&z1_0, &z2_0, args.optimum, args.optimum2, args.omega, args.omega2);
+    let (z1_0, z2_0) = compute_phenotypes_two_parallel(
+        &genotypes,
+        &a1,
+        &b1,
+        &a2,
+        &b2,
+        &p0,
+        &env0,
+        determine_threads(args.threads),
+    );
+    let fitness0 = combined_fitness(
+        &z1_0,
+        &z2_0,
+        args.optimum,
+        args.optimum2,
+        args.omega,
+        args.omega2,
+    );
     let s_eff0 = per_locus_selection_effects(
         &z1_0,
         &z2_0,
@@ -897,6 +912,7 @@ fn combined_fitness(
 ///   s_j = sum_i w_i_norm * [ dlogw/dz1_i * (a1_j + b1_j * E_i) + dlogw/dz2_i * (a2_j + b2_j * E_i) ]
 /// where w_i_norm are the normalized reproduction weights (sum to 1 across individuals),
 /// dlogw/dz_k = -(z_k - optimum_k) / omega_k^2, and E_i is the environment.
+#[allow(clippy::too_many_arguments)]
 fn per_locus_selection_effects(
     phenos1: &[f64],
     phenos2: &[f64],
