@@ -19,7 +19,7 @@ Built for speed, reproducibility, and clarity — ideal for experiments, teachin
 - Cross-trait correlations: set `--rg-add` and `--rg-gxe` in [-1, 1]
 - Initialization: per‑locus frequencies from `U(init_freq_min, init_freq_max)` (defaults 0.05–0.95)
 - Reproducibility: deterministic with `--seed`; per-thread seeds derived per generation
-- Output: CSV trajectories (`generation,snp_id,frequency`) and phenotype timeseries streamed to disk
+- Output: CSV trajectories with per-SNP effects and selection, and phenotype timeseries streamed to disk
 - Population schedules: change N during the run with repeatable `--pop-schedule GEN:SIZE`
 
 ---
@@ -149,15 +149,15 @@ Live progress appears on stderr, for example:
 [00:00:12.345] gen 42/100 | avg_w=0.913201 | h2_1(add=0.200,gxe=0.100) real(0.197,0.098) | h2_2(add=0.150,gxe=0.050) real(0.148,0.052) | rg(add=0.51,gxe=0.19) | N=1000 L=500 thr=8
 ```
 
-Output CSV (`allele_trajectories.csv`) looks like:
+Output CSV (`allele_trajectories.csv`) includes SNP effects and effective selection coefficients:
 
 ```csv
-generation,snp_id,frequency
-0,0,0.432
-0,1,0.517
+generation,snp_id,frequency,a1,b1,a2,b2,s_effect
+0,0,0.432,-0.010,0.052,0.031,-0.014,0.004
+0,1,0.517,0.022,-0.006,0.012,0.003,-0.001
 ...
-1,0,0.429
-1,1,0.519
+1,0,0.429,-0.010,0.052,0.031,-0.014,0.003
+1,1,0.519,0.022,-0.006,0.012,0.003,-0.002
 ...
 ```
 
@@ -174,7 +174,15 @@ Where:
 - phen_cov/phen_corr: phenotypic covariance and correlation between trait 1 and 2 in the generation.
 - real_var_add*/real_var_gxe*: realized additive and GxE genetic variances computed from current allele frequencies and effect sizes.
 - rg_add_real/rg_gxe_real: realized genetic correlations (additive and GxE components).
- 
+
+### Effective selection coefficient `s_effect`
+
+Each SNP row in the allele CSV includes `s_effect`, an average marginal effect on relative fitness per allele copy for that generation. Under Gaussian stabilizing selection on both traits, we compute log-fitness gradients with respect to each trait and weight the SNP’s marginal phenotype effects `(a + b·E)` by those gradients, averaging across individuals using the normalized reproduction weights. Formally:
+
+`s_effect[j] = Σ_i w_i · [ −(z1_i − optimum1)/ω1² · (a1_j + b1_j E_i) + −(z2_i − optimum2)/ω2² · (a2_j + b2_j E_i) ]`.
+
+This reflects the total selection pressure mediated through both traits and environments, not just raw effect sizes.
+
 ---
 
 ## Sample CSV
@@ -218,9 +226,11 @@ CLI options (auto-generated from `--help`):
 | `--init-freq-min` | `<INIT_FREQ_MIN>` | `0.05` | Minimum initial allele frequency per locus (exclusive) |
 | `--init-freq-max` | `<INIT_FREQ_MAX>` | `0.95` | Maximum initial allele frequency per locus (exclusive) |
 | `-o`, `--out` | `<OUT>` | `allele_trajectories.csv` | Output CSV file path for allele frequency trajectories |
+| `--phenotype-out` | `<FILE>` | `phenotype_timeseries.csv` | Output CSV file path for per-generation phenotype statistics |
 | `--seed` | `<SEED>` | — | Random seed (optional). If not provided, a random seed is used |
 | `--threads` | `<THREADS>` | `0` | Number of worker threads to use (0 = auto-detect cores) |
 | `--pop-schedule` | `<POP_SCHEDULE>` | — | Population size schedule entries like `gen:size` (repeatable) |
+| `--allow-fixation` | — | `false` | Allow alleles to fix or be lost (disables boundary reintroduction) |
 | `-h`, `--help` | — | — | Print help |
 | `-V`, `--version` | — | — | Print version |
 
@@ -240,7 +250,7 @@ Implementation notes:
 
 - Multithreading uses the Rust standard library (`std::thread`) and channels
 - Per‑thread RNG seeds derived from the global seed and generation index
-- Optional “edge reintroduction” keeps loci away from absorbing boundaries for long runs
+- Optional boundary behavior: by default, “edge reintroduction” keeps loci away from absorbing boundaries; pass `--allow-fixation` to disable this and allow true fixation/loss
 
 ---
 

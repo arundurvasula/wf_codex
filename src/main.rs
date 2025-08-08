@@ -164,6 +164,11 @@ struct Args {
     /// Repeat the flag to provide multiple generation changes.
     #[arg(long = "pop-schedule")]
     pop_schedule: Vec<String>,
+
+    /// Allow alleles to fix or be lost by disabling boundary reintroduction.
+    /// When set, the simulator will not adjust loci at 0 or 2N back to ~1/N or 1-1/N.
+    #[arg(long = "allow-fixation", default_value_t = false)]
+    allow_fixation: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -299,7 +304,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Print simulation header with parameters
     let start = Instant::now();
     eprintln!(
-        "[{}] start | N={} L={} G={} h2_add={:.4} h2_gxe={:.4} env_sd={:.4} omega={:.4} init_freq_range=[{:.3},{:.3}] seed={} threads={} out={}",
+        "[{}] start | N={} L={} G={} h2_add={:.4} h2_gxe={:.4} env_sd={:.4} omega={:.4} init_freq_range=[{:.3},{:.3}] seed={} threads={} out={} allow_fixation={}",
         fmt_elapsed(start.elapsed()),
         n,
         l,
@@ -312,7 +317,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.init_freq_max,
         seed,
         threads,
-        &args.out
+        &args.out,
+        args.allow_fixation
     );
 
     // Per-generation simulation
@@ -375,8 +381,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut genotypes = genotypes_next; // shadow and move ownership
         current_n = genotypes.len();
 
-        // Reintroduce lost or fixed alleles to maintain polymorphism at ~1/N or 1-1/N
-        reintroduce_edges(&mut rng, &mut genotypes);
+        // Optionally reintroduce lost/fixed alleles to maintain polymorphism
+        if !args.allow_fixation {
+            reintroduce_edges(&mut rng, &mut genotypes);
+        }
 
         // Record frequencies
         cur_freqs = allele_freqs(&genotypes);
