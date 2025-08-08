@@ -20,3 +20,25 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+      
+  test:
+    name: Run Rust Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run default tests
+        run: cargo test --verbose
+
+      - name: Run heavy tests (feature: heavy-tests)
+        run: cargo test --features heavy-tests --verbose
