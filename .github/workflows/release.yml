@@ -12,8 +12,8 @@ jobs:
     strategy:
       matrix:
         # Pin runner images to avoid surprise migrations (e.g., macos-latest -> macOS 15).
-        # Add additional macOS versions as needed to build for multiple architectures.
-        os: [ubuntu-22.04, macos-13]
+        # Build both Intel (macos-13, x86_64) and Apple Silicon (macos-14, arm64).
+        os: [ubuntu-22.04, macos-13, macos-14]
 
     steps:
       - name: Checkout code
