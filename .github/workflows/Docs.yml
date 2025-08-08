@@ -30,6 +30,18 @@ jobs:
       - name: Build Rust documentation
         run: cargo doc --no-deps --all-features
 
+      - name: Ensure root index redirects to crate docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Create an index.html redirect to the crate docs to avoid blank landing pages
+          mkdir -p target/doc
+          echo '<meta http-equiv="refresh" content="0;url=wf_codex/index.html">' > target/doc/index.html
+
+      - name: Remove rustdoc lock file if present
+        run: |
+          rm -f target/doc/.lock
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
