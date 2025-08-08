@@ -9,27 +9,36 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Pin runner images to avoid surprise migrations (e.g., macos-latest -> macOS 15).
+        # Add additional macOS versions as needed to build for multiple architectures.
+        os: [ubuntu-22.04, macos-13]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Rust
-        uses: actions/setup-rust@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          rust-version: stable
+          components: clippy, rustfmt
 
       - name: Build release binary
         run: cargo build --release
 
-      - name: Rename binary with OS suffix
+      - name: Rename binary with OS/arch suffix
+        shell: bash
         run: |
+          set -euxo pipefail
           BIN_NAME=wf_codex
-          PLATFORM=${{ matrix.os == 'ubuntu-latest' && 'linux' || 'macos' }}
-          mv target/release/$BIN_NAME $BIN_NAME-$PLATFORM
+          case "${{ matrix.os }}" in
+            ubuntu-*) PLATFORM=linux ;;
+            macos-*)  PLATFORM=macos ;;
+            *)        PLATFORM=unknown ;;
+          esac
+          ARCH=$(uname -m)
+          mv "target/release/${BIN_NAME}" "${BIN_NAME}-${PLATFORM}-${ARCH}"
 
-      - name: Upload release asset
+      - name: Upload release asset(s)
         uses: softprops/action-gh-release@v1
         with:
           files: wf_codex-*
