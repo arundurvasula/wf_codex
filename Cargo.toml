@@ -11,3 +11,13 @@ rand_distr = "0.4"
 [features]
 # Enable heavier, longer-running stochastic tests.
 heavy-tests = []
+
+[profile.release]
+# Maximize runtime performance for release artifacts
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+# Remove debug symbols from final binaries (use debug=0 as a fallback on older toolchains)
+strip = "symbols"
+debug = 0

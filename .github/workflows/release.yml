@@ -11,9 +11,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Pin runner images to avoid surprise migrations (e.g., macos-latest -> macOS 15).
-        # Build both Intel (macos-13, x86_64) and Apple Silicon (macos-14, arm64).
-        os: [ubuntu-22.04, macos-13, macos-14]
+        include:
+          # Linux native (x86_64, tuned to the runner CPU)
+          - os: ubuntu-22.04
+            rustflags: "-C target-cpu=native"
+            cpu_tag: ""
+          # Linux portable high-perf (x86-64-v3)
+          - os: ubuntu-22.04
+            rustflags: "-C target-cpu=x86-64-v3"
+            cpu_tag: "x86-64-v3"
+          # macOS Intel (x86_64)
+          - os: macos-13
+            rustflags: "-C target-cpu=native"
+            cpu_tag: ""
+          # macOS Apple Silicon (arm64)
+          - os: macos-14
+            rustflags: "-C target-cpu=native"
+            cpu_tag: ""
 
     steps:
       - name: Checkout code
@@ -30,9 +44,11 @@ jobs:
           cache-on-failure: true
 
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo build --release
 
-      - name: Rename binary with OS/arch suffix
+      - name: Rename and strip binary with OS/arch suffix
         shell: bash
         run: |
           set -euxo pipefail
@@ -43,7 +59,19 @@ jobs:
             *)        PLATFORM=unknown ;;
           esac
           ARCH=$(uname -m)
-          mv "target/release/${BIN_NAME}" "${BIN_NAME}-${PLATFORM}-${ARCH}"
+          CPU_TAG="${{ matrix.cpu_tag }}"
+          if [[ -n "$CPU_TAG" ]]; then
+            OUT="${BIN_NAME}-${PLATFORM}-${ARCH}-${CPU_TAG}"
+          else
+            OUT="${BIN_NAME}-${PLATFORM}-${ARCH}"
+          fi
+          cp "target/release/${BIN_NAME}" "$OUT"
+          # Extra strip as a safety net (profile also strips)
+          if [[ "$PLATFORM" == "linux" ]]; then
+            strip "$OUT" || true
+          elif [[ "$PLATFORM" == "macos" ]]; then
+            strip -x "$OUT" || true
+          fi
 
       - name: Upload release asset(s)
         if: github.event_name == 'release'
@@ -57,5 +85,5 @@ jobs:
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: wf_codex-${{ matrix.os }}-${{ runner.arch }}
+          name: wf_codex-${{ matrix.os }}-${{ runner.arch }}${{ matrix.cpu_tag && format('-{0}', matrix.cpu_tag) || '' }}
           path: wf_codex-*

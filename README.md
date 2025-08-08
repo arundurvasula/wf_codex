@@ -46,6 +46,61 @@ cargo clippy -- -D warnings
 
 ---
 
+## Prebuilt Binaries
+
+You can download ready-to-run binaries from the GitHub Releases page.
+
+- Names: `wf_codex-<platform>-<arch>` or `wf_codex-<platform>-<arch>-<cpu_tag>`
+  - Examples:
+    - `wf_codex-linux-x86_64` (native to CI runner CPU)
+    - `wf_codex-linux-x86_64-x86-64-v3` (portable, fast on modern x86_64)
+    - `wf_codex-macos-x86_64` (Intel Macs)
+    - `wf_codex-macos-arm64` (Apple Silicon/M1/M2/M3)
+- Choosing the right file:
+  - macOS Apple Silicon: use `-macos-arm64`.
+  - macOS Intel: use `-macos-x86_64`.
+  - Linux x86_64: prefer `-linux-x86_64-x86-64-v3` for broad compatibility and speed; the plain `-linux-x86_64` build is tuned to the CI runner CPU and may not run on older machines.
+
+Download and run:
+
+```bash
+# Example for macOS Apple Silicon
+curl -L -o wf_codex "https://github.com/<org>/<repo>/releases/download/<tag>/wf_codex-macos-arm64"
+chmod +x wf_codex
+./wf_codex --help
+```
+
+Or make it available system-wide:
+
+```bash
+install -m 0755 wf_codex /usr/local/bin/wf_codex  # may require sudo
+```
+
+---
+
+## macOS Gatekeeper (Unknown Developer)
+
+Because these binaries are not notarized, macOS may block them with a warning like “cannot be opened because it is from an unidentified developer.” You have a few options to allow running:
+
+- Open via Finder:
+  - Right-click the binary → Open → Open. This whitelists that one binary.
+- Allow from Privacy & Security:
+  - First attempt to run the binary (it will be blocked).
+  - Go to System Settings → Privacy & Security → “Security” section → click “Open Anyway”.
+- Remove quarantine attribute (Terminal):
+  - Downloads from browsers are often marked quarantined. Clear it with:
+    - `xattr -d com.apple.quarantine ./wf_codex-macos-arm64`
+
+After one of the above, run as usual:
+
+```bash
+./wf_codex --help
+```
+
+Note: If you move or re-download the file, you may need to repeat the step.
+
+---
+
 ## Quickstart
 
 Run a small demo with 1,000 individuals, 500 loci, and 100 generations:
