@@ -10,9 +10,9 @@
 
 ## Phenotype
 
-For each individual with genotype dosages `g_j ∈ {0,1,2}` and initial frequencies `p0_j`:
+For each individual with genotype dosages `g_j ∈ {0,1,2}`:
 
-`z = Σ_j (g_j − 2 p0_j) · (a_j + b_j · E)`
+`z = Σ_j g_j · (a_j + b_j · E)`
 
 - `a_j`: additive effect size
 - `b_j`: GxE effect size
@@ -31,4 +31,3 @@ Two-trait stabilizing selection (unnormalized):
 `exp(−(z1 − opt1)^2 / (2 ω1^2) − (z2 − opt2)^2 / (2 ω2^2))`
 
 Weights are normalized for parent sampling.
-

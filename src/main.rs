@@ -741,12 +741,12 @@ fn assign_effects_two<R: Rng + ?Sized>(
 }
 
 /// Compute a single phenotype for all individuals.
-/// Compute a single phenotype for all individuals.
+/// Phenotype is Σ_j g_j · (a_j + b_j · E), i.e., no centering by initial frequencies.
 fn compute_phenotypes(
     genotypes: &[Vec<u8>],
     a: &[f64],
     b: &[f64],
-    p0: &[f64],
+    _p0: &[f64],
     env: &[f64],
 ) -> Vec<f64> {
     let n = genotypes.len();
@@ -757,8 +757,7 @@ fn compute_phenotypes(
         let mut z = 0.0f64;
         for j in 0..l {
             let g = g_row[j] as f64;
-            let dev = g - 2.0 * p0[j]; // center at initial freq
-            z += dev * (a[j] + b[j] * e);
+            z += g * (a[j] + b[j] * e);
         }
         pheno[i] = z;
     }
@@ -774,7 +773,7 @@ fn compute_phenotypes_two_parallel(
     b1: &[f64],
     a2: &[f64],
     b2: &[f64],
-    p0: &[f64],
+    _p0: &[f64],
     env: &[f64],
     threads: usize,
 ) -> (Vec<f64>, Vec<f64>) {
@@ -783,15 +782,14 @@ fn compute_phenotypes_two_parallel(
         return (vec![], vec![]);
     }
     if threads <= 1 {
-        let z1 = compute_phenotypes(genotypes, a1, b1, p0, env);
-        let z2 = compute_phenotypes(genotypes, a2, b2, p0, env);
+        let z1 = compute_phenotypes(genotypes, a1, b1, _p0, env);
+        let z2 = compute_phenotypes(genotypes, a2, b2, _p0, env);
         return (z1, z2);
     }
     let a1 = Arc::new(a1.to_vec());
     let b1 = Arc::new(b1.to_vec());
     let a2 = Arc::new(a2.to_vec());
     let b2 = Arc::new(b2.to_vec());
-    let p0 = Arc::new(p0.to_vec());
     let env = Arc::new(env.to_vec());
     let genotypes = Arc::new(genotypes.to_owned());
 
@@ -808,7 +806,6 @@ fn compute_phenotypes_two_parallel(
         let b1 = Arc::clone(&b1);
         let a2 = Arc::clone(&a2);
         let b2 = Arc::clone(&b2);
-        let p0 = Arc::clone(&p0);
         let env = Arc::clone(&env);
         let genos = Arc::clone(&genotypes);
         thread::spawn(move || {
@@ -822,9 +819,8 @@ fn compute_phenotypes_two_parallel(
                 let mut z2 = 0.0f64;
                 for j in 0..l {
                     let g = g_row[j] as f64;
-                    let dev = g - 2.0 * p0[j];
-                    z1 += dev * (a1[j] + b1[j] * e);
-                    z2 += dev * (a2[j] + b2[j] * e);
+                    z1 += g * (a1[j] + b1[j] * e);
+                    z2 += g * (a2[j] + b2[j] * e);
                 }
                 out1[local_i] = z1;
                 out2[local_i] = z2;

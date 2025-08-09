@@ -239,7 +239,7 @@ CLI options (auto-generated from `--help`):
 ## Model Sketch
 
 - Genotypes: diploid dosages in {0,1,2}; initial p₀ per locus sampled U(a, b)
-- Phenotypes: z = Σ_j (g_j − 2p₀_j) · (a_j + b_j·E), with per-individual E ~ N(0, env_sd²)
+- Phenotypes: z = Σ_j g_j · (a_j + b_j·E), with per-individual E ~ N(0, env_sd²)
 - Fitness (two traits): unnormalized Gaussian stabilizing selection around optima:
   exp(−(z₁ − opt₁)² / (2ω₁²) − (z₂ − opt₂)² / (2ω₂)²), normalized to sampling weights
 - Effect sizes: per-locus (a, b) scaled to match target per-trait heritabilities; two-trait
