@@ -370,7 +370,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Reproduce to create next generation (N diploid offspring)
         let next_n = pop_sched.get(&generation).copied().unwrap_or(current_n);
-        let genotypes_next = reproduce_parallel_to_size(
+        let genotypes_next = reproduce_wf_binomial_to_size(
             &genotypes,
             &fitness,
             seed,
@@ -1095,6 +1095,7 @@ fn reproduce_parallel(
 }
 
 /// Parallel reproduction producing exactly `next_n` offspring regardless of current N.
+#[allow(dead_code)]
 fn reproduce_parallel_to_size(
     genotypes: &[Vec<u8>],
     fitness_weights: &[f64],
@@ -1259,6 +1260,7 @@ fn sample_env_parallel(
 }
 
 /// Sample an index from a normalized CDF using inverse transform sampling.
+#[allow(dead_code)]
 fn sample_index<R: Rng + ?Sized>(rng: &mut R, cdf: &[f64], uniform01: &Uniform<f64>) -> usize {
     let u = uniform01.sample(rng);
     // binary search
@@ -1269,6 +1271,7 @@ fn sample_index<R: Rng + ?Sized>(rng: &mut R, cdf: &[f64], uniform01: &Uniform<f
 }
 
 /// Draw a single gamete allele from a diploid genotype dosage in `{0,1,2}`.
+#[allow(dead_code)]
 fn draw_gamete_allele<R: Rng + ?Sized>(rng: &mut R, genotype: u8) -> u8 {
     match genotype {
         0 => 0,
@@ -1282,6 +1285,90 @@ fn draw_gamete_allele<R: Rng + ?Sized>(rng: &mut R, genotype: u8) -> u8 {
         2 => 1,
         _ => unreachable!(),
     }
+}
+
+/// Compute per-locus post-selection allele frequencies in the gamete pool.
+/// p_sel[j] = sum_i w_i * (g_{i,j} / 2)
+fn weighted_allele_freqs_per_locus(genotypes: &[Vec<u8>], fitness_weights: &[f64]) -> Vec<f64> {
+    let n = genotypes.len();
+    if n == 0 {
+        return vec![];
+    }
+    let l = genotypes[0].len();
+    let mut p = vec![0.0f64; l];
+    for i in 0..n {
+        let w = fitness_weights[i];
+        let row = &genotypes[i];
+        for j in 0..l {
+            p[j] += w * (row[j] as f64) * 0.5;
+        }
+    }
+    p
+}
+
+/// Wright–Fisher reproduction to exact size using per-locus binomial sampling under selection.
+///
+/// For each locus j, compute the weighted parental allele frequency p_sel[j], then draw
+/// each offspring genotype dosage as Binomial(n=2, p=p_sel[j]) independently across individuals.
+fn reproduce_wf_binomial_to_size(
+    genotypes: &[Vec<u8>],
+    fitness_weights: &[f64],
+    seed: u64,
+    generation: u64,
+    threads: usize,
+    next_n: usize,
+) -> Vec<Vec<u8>> {
+    let parent_n = genotypes.len();
+    if parent_n == 0 || next_n == 0 {
+        return vec![];
+    }
+    let l = genotypes[0].len();
+    let p_sel = weighted_allele_freqs_per_locus(genotypes, fitness_weights);
+
+    if threads <= 1 {
+        let mut rng = StdRng::seed_from_u64(seed ^ generation.wrapping_mul(0xA24B_1B9C));
+        let mut next = vec![vec![0u8; l]; next_n];
+        for row in next.iter_mut() {
+            for j in 0..l {
+                row[j] = binomial2(&mut rng, p_sel[j]);
+            }
+        }
+        return next;
+    }
+
+    let p_sel = Arc::new(p_sel);
+    let (tx, rx) = mpsc::channel();
+    let chunk = next_n.div_ceil(threads);
+    for t in 0..threads {
+        let start = t * chunk;
+        if start >= next_n {
+            break;
+        }
+        let end = ((t + 1) * chunk).min(next_n);
+        let tx = tx.clone();
+        let p = Arc::clone(&p_sel);
+        let local_seed =
+            seed ^ generation.wrapping_mul(0xA24B_1B9C) ^ (t as u64).wrapping_mul(0x9E37_79B9);
+        thread::spawn(move || {
+            let mut rng = StdRng::seed_from_u64(local_seed);
+            let l = p.len();
+            let mut part = vec![vec![0u8; l]; end - start];
+            for row in part.iter_mut() {
+                for j in 0..l {
+                    row[j] = binomial2(&mut rng, p[j]);
+                }
+            }
+            let _ = tx.send((start, part));
+        });
+    }
+    drop(tx);
+    let mut next = vec![vec![0u8; l]; next_n];
+    for (start, part) in rx.iter() {
+        for (offset, row) in part.into_iter().enumerate() {
+            next[start + offset] = row;
+        }
+    }
+    next
 }
 
 /// Compute derived allele frequencies across loci for the current population genotypes.
